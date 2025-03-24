@@ -12,7 +12,7 @@ library(haven)
 library(stringr)
 
 # load WHO's data
-dat_3d_WHO <- read_dta("C:/Users/qifangbi/OneDrive - Bill & Melinda Gates Foundation/Hexa/WHO_data/ipvonly_studies_3doses.dta") %>%
+dat_3d_WHO <- read_dta("WHO_data/ipvonly_studies_3doses.dta") %>%
   rename(N_1 = n1, N_2 = n2, N_3 = n3, p_1 = sc1p, p_2 = sc2p, p_3 = sc3p) %>%
   mutate(type = replace(type, type=="3IPV", "IPV"),
          type = replace(type, type=="3sIPV", "sIPV"),
@@ -42,7 +42,7 @@ dat_3d_WHO <- read_dta("C:/Users/qifangbi/OneDrive - Bill & Melinda Gates Founda
 
 
 # load new data
-new_dat0 <- read_xlsx("C:/Users/qifangbi/OneDrive - Bill & Melinda Gates Foundation/Hexa/hexa_review.xlsx", 
+new_dat0 <- read_xlsx("hexa_review.xlsx", 
                       na="", sheet = "extracted_data") %>% 
   filter(!is.na(study), !is.na(p)) %>% 
   rename(author = study) %>%
