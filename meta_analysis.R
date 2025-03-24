@@ -9,6 +9,7 @@ library(dplyr)
 library(readxl)
 library(tidyr)
 library(haven)
+library(stringr)
 
 # load WHO's data
 dat_3d_WHO <- read_dta("C:/Users/qifangbi/OneDrive - Bill & Melinda Gates Foundation/Hexa/WHO_data/ipvonly_studies_3doses.dta") %>%
@@ -16,17 +17,41 @@ dat_3d_WHO <- read_dta("C:/Users/qifangbi/OneDrive - Bill & Melinda Gates Founda
   mutate(type = replace(type, type=="3IPV", "IPV"),
          type = replace(type, type=="3sIPV", "sIPV"),
          type = replace(type, type=="3fIPV", "fIPV"),
-         schedule = replace(schedule, schedule=="8, 16, 24 weeks", "2, 4, 6 months")) %>%
-  select(-sc1,-sc2,-sc3,-slno,-schr,-ipvonly,-frac_full,-salk_sabin)
+         schedule = replace(schedule, schedule=="8, 16, 24 weeks", "2, 4, 6 months"),
+         year = as.numeric(str_sub(Journal_year, -4, -1))) %>%
+  # clean up/shorten study name
+  mutate(author = replace(author, author == "Luis Rivera et al. (Dominican Rep)", "Rivera L et al. (Dominican Rep)"),
+         author = replace(author, author == "Josefina Cadorna-Carlos et al. (Philippines)", "Cadorna-Carlos J et al. (Philippines)"),
+         author = replace(author, author == "Sonia Resik et al. (Cuba)", "Resik S et al. (Cuba)"),
+         author = replace(author, author == "Gustavo Dayan et al. (Puerto Rico)", "Dayan G et al. (Puerto Rico)"),
+         author = replace(author, author == "Jingjun Qui et al. (China)", "Qui J et al. (China)"),
+         author = replace(author, author == "Guoyang Liao et al (China)", "Liao G et al (China)"),
+         author = replace(author, author == "Guoyang Liao et al. (China)", "Liao G et al. (China)"),
+         author = replace(author, author == "Yuemei Hu et al. (China)", "Hu Y et al. (China)"),
+         author = replace(author, author == "Ali Saleem at el. (Pakistan)", "Saleem A et al. (Pakistan)"),
+         author = replace(author, author == "Ananda et al. (Panama and Dominican Rep)", "Bandyopadhyay et al. (Panama & Dominican Rep)"),
+         author = replace(author, author == "Chu kai et al. (China)", "Chu K et al. (China)"),
+         author = replace(author, author == "Ali Jafer Mohammed et al. (Oman)", "Mohammed AJ et al. (Oman)"),
+         author = replace(author, author == "Miguel O'Ryan et al. (Chile)", "O'Ryan M et al. (Chile)")
+  ) %>%
+  rename(author_country = author) %>%
+  mutate(country = sub(".*\\(([^)]+)\\).*", "\\1", author_country),
+         author = sub("[\\.\\(].*", "", author_country)) %>%
+  mutate(country = replace(country, country == "Havana", "Cuba")) %>%
+  select(-sc1,-sc2,-sc3,-slno,-schr,-ipvonly,-frac_full,-salk_sabin,-Journal_year,-author_country)
 
 
 # load new data
-new_dat0 <- read_xlsx("C:/Users/qifangbi/OneDrive - Bill & Melinda Gates Foundation/Hexa/hexa_review.xlsx", na="", sheet = "extracted_data") %>% 
+new_dat0 <- read_xlsx("C:/Users/qifangbi/OneDrive - Bill & Melinda Gates Foundation/Hexa/hexa_review.xlsx", 
+                      na="", sheet = "extracted_data") %>% 
   filter(!is.na(study), !is.na(p)) %>% 
   rename(author = study) %>%
-  mutate(Journal_year = paste(journal, year)) %>% 
-  mutate(author = paste(author," et al (", location,")", sep="")) %>%
-  select(author, Journal_year, study_id, schedule, type, num_doses, type_notes, strain, serotype, p, N, Notes)
+  rename(country = location) %>%
+  mutate(author = paste(author," et al", sep="")) %>%
+  mutate(author = replace(author, author == "Sanofi et al", "Sanofi study")) %>%
+  mutate(type = ifelse(type=="Hexa", paste(type, " (", type_notes, ")", sep=""), type)) %>%
+  select(author, year, country, study_id, schedule, type, num_doses, type_notes, strain, serotype, p, N, Notes) %>%
+  filter(author != "LG Chem et al") # confidentialA
 
 # format new data from long to wide
 new_dat <- new_dat0 %>%
@@ -48,32 +73,17 @@ dat_34d <- dat_3d_WHO %>%
          log_p_2 = log(p_2/100), se_log_p_2 = sqrt((1 - p_2/100) / (p_2/100 * N_2)), 
          log_p_3 = log(p_3/100), se_log_p_3 = sqrt((1 - p_3/100) / (p_3/100 * N_3)) 
          ) %>%
-  arrange(num_doses, schedule, type)
+  mutate(author_year = paste(sub("\\s+$", "", author), year, sep=", ")) %>%
+  arrange(num_doses, schedule, desc(type))
 
-# correct a few mistakes and filter out ineligible studies
+# correct a few mistakes in WHO data and filter out ineligible studies
 dat_34d <- dat_34d %>%
   # remove two arms from Grassly
   filter(study_id != 108 | (study_id==108 & Notes == "infants born to mothers given no DTaP/IPV in pregnancy")) %>%
   # update WHO data - Luis Rivera et al. (Dominican Rep)
   mutate(p_1 = ifelse(study_id == 14, 100, p_1),
          N_1 = ifelse(study_id == 14, 206, N_1),
-         N_2 = ifelse(study_id == 14, 203, N_2)) %>%
-  # clean up/shorten study name
-  mutate(author = replace(author, author == "Luis Rivera et al. (Dominican Rep)", "Rivera et al. (Dominican Rep)"),
-        author = replace(author, author == "Josefina Cadorna-Carlos et al. (Philippines)", "Cadorna-Carlos et al. (Philippines)"),
-        author = replace(author, author == "Sonia Resik et al. (Cuba)", "Resik S et al. (Cuba)"),
-        author = replace(author, author == "Gustavo Dayan et al. (Puerto Rico)", "Dayan G et al. (Puerto Rico)"),
-        author = replace(author, author == "Jingjun Qui et al. (China)", "Qui J et al. (China)"),
-        author = replace(author, author == "Guoyang Liao et al (China)", "Liao G et al (China)"),
-        author = replace(author, author == "Guoyang Liao et al. (China)", "Liao G et al. (China)"),
-        author = replace(author, author == "Yuemei Hu et al. (China)", "Hu Y et al. (China)"),
-        author = replace(author, author == "Ali Saleem at el. (Pakistan)", "Saleem A et al. (Pakistan)"),
-        author = replace(author, author == "Ananda et al. (Panama and Dominican Rep)", "Bandyopadhyay et al. (Panama and Dominican Rep)"),
-        author = replace(author, author == "Chu kai et al. (China)", "Chu K et al. (China)"),
-        author = replace(author, author == "Ali Jafer Mohammed et al. (Oman)", "Mohammed AJ et al. (Oman)"),
-        author = replace(author, author == "Miguel O'Ryan et al. (Chile)", "O'Ryan M et al. (Chile)")
-  ) %>% 
-  mutate(country = sub(".*\\((.*?)\\).*", "\\1", author))
+         N_2 = ifelse(study_id == 14, 203, N_2)) 
 
 
 dat_34d %>% filter(num_doses == 4) %>% with(table(schedule, type))
@@ -82,15 +92,17 @@ dat_34d %>% filter(num_doses == 3) %>% with(table(schedule, type))
 #write.csv(dat_34d, 'dat_34d.csv')
 
 ### rma method
-tau_estim_method = "REML"
+tau_estim_method = "EB"
 
 
 # 3 dose, IPV or IPV(hexa) only
 dat_34d %>% 
-  filter(num_doses == 3, type %in% c("IPV","IPV (hexa)")) %>% 
+  filter(num_doses == 3, type %in% c("IPV","Hexa")) %>% 
   with(table(schedule, type))
 
-dat_3d_allIPV <- dat_34d %>% filter(num_doses == 3, type %in% c("IPV","IPV (hexa)"))
+dat_3d_allIPV <- dat_34d %>% 
+  filter(num_doses == 3, type %in% c("IPV")|str_detect(type, "Hexa")) 
+  
 
 dat_3d_allIPV %>% group_by(schedule) %>% summarise(count=n()) -> all_schedule_3d_allIPV
 
@@ -133,16 +145,18 @@ make_figure_3d_type1 <- function(){
                 dat=dat_3d_allIPV)
   
   forest(log_3d,
-         slab=author,
+         slab=author_year,
          transf=function(x) exp(x),
          refline=NA,
          xlab="3-dose type 1 seroconversion",
-         ilab=type,#data.frame(ifelse(dat_3d_allIPV$study_id>100,"*","")),
-         ilab.xpos=c(0.5), 
+         ilab=data.frame(country,type,ifelse(dat_3d_allIPV$study_id>100,"*","")),
+         ilab.xpos=c(-0.25,0.25,-0.82), 
+         ilab.lab=c("Country", "Vaccine",""),
+         ilab.pos=4,
          cex=.6,
          addcred=F,
-         ylim=c(0,50),
-         xlim=c(-0.5,1.5),
+         ylim=c(0,48),
+         xlim=c(-0.8,1.5),
          rows=gen_rma_rows(unlist(all_schedule_3d_allIPV$count), 
                            starting_row=1, gap_rows=3), 
          alim=c(0.5, 1), 
@@ -150,7 +164,7 @@ make_figure_3d_type1 <- function(){
   )
   
   ## add text for IPV schedule
-  text(-0.5, gen_rma_schedule_rows(c_vec=unlist(all_schedule_3d_allIPV$count),gap_rows=3) +0.2, 
+  text(-0.8, gen_rma_schedule_rows(c_vec=unlist(all_schedule_3d_allIPV$count),gap_rows=3) +0.2, 
        unlist(all_schedule_3d_allIPV$schedule), cex=.6, pos=4, font=2)
 
   
@@ -186,11 +200,14 @@ make_figure_3d_type2 <- function(){
          transf=function(x) exp(x),
          refline=NA,
          xlab="3-dose type 2 seroconversion",
-         #ilab=data.frame(dat_2d$Location),
-         ilab.xpos=c(-1,-.75), cex=.6,
+         ilab=data.frame(country,type,ifelse(dat_3d_allIPV$study_id>100,"*","")),
+         ilab.xpos=c(-0.25,0.25,-0.82), 
+         ilab.lab=c("Country", "Vaccine",""),
+         ilab.pos=4,
+         cex=.6,
          addcred=F,
-         ylim=c(0,50),
-         xlim=c(-0.5,1.5),
+         ylim=c(0,48),
+         xlim=c(-0.8,1.5),
          rows=gen_rma_rows(unlist(all_schedule_3d_allIPV$count), 
                            starting_row=1, gap_rows=3), 
          alim=c(0.5, 1), 
@@ -198,7 +215,7 @@ make_figure_3d_type2 <- function(){
   )
   
   ## add text for IPV schedule
-  text(-0.5, gen_rma_schedule_rows(c_vec=unlist(all_schedule_3d_allIPV$count),gap_rows=3) +0.2, unlist(all_schedule_3d_allIPV$schedule), cex=.6, pos=4, font=2)
+  text(-0.8, gen_rma_schedule_rows(c_vec=unlist(all_schedule_3d_allIPV$count),gap_rows=3) +0.2, unlist(all_schedule_3d_allIPV$schedule), cex=.6, pos=4, font=2)
   
   dat_3d_allIPV_rma3 <- rma(yi=log_p_2,
                             sei=se_log_p_2,
@@ -231,11 +248,14 @@ make_figure_3d_type3 <- function(){
          transf=function(x) exp(x),
          refline=NA,
          xlab="3-dose type 3 seroconversion",
-         #ilab=data.frame(dat_2d$Location),
-         ilab.xpos=c(-1,-.75), cex=.6,
+         ilab=data.frame(country,type,ifelse(dat_3d_allIPV$study_id>100,"*","")),
+         ilab.xpos=c(-0.25,0.25,-0.82), 
+         ilab.lab=c("Country", "Vaccine",""),
+         ilab.pos=4,
+         cex=.6,
          addcred=F,
-         ylim=c(0,50),
-         xlim=c(-0.5,1.5),
+         ylim=c(0,48),
+         xlim=c(-0.8,1.5),
          rows=gen_rma_rows(unlist(all_schedule_3d_allIPV$count), 
                            starting_row=1, gap_rows=3), 
          alim=c(0.5, 1), 
@@ -243,7 +263,7 @@ make_figure_3d_type3 <- function(){
   )
   
   ## add text for IPV schedule
-  text(-0.5, gen_rma_schedule_rows(c_vec=unlist(all_schedule_3d_allIPV$count),gap_rows=3) +0.2, 
+  text(-0.8, gen_rma_schedule_rows(c_vec=unlist(all_schedule_3d_allIPV$count),gap_rows=3) +0.2, 
        unlist(all_schedule_3d_allIPV$schedule), cex=.6, pos=4, font=2)
   
   dat_3d_allIPV_rma3 <- rma(yi=log_p_3,
@@ -284,12 +304,15 @@ make_figure_4d_type1 <- function(){
                 dat=dat_4d_allIPV)
   
   forest(log_4d,
-         slab=author,
+         slab=author_year,
          transf=function(x) exp(x),
          refline=NA,
          xlab="4-dose type 1 seroconversion",
-         ilab=data.frame(dat_4d_allIPV$type),
-         ilab.xpos=c(0.5), cex=.6,
+         ilab=data.frame(country,type,ifelse(dat_4d_allIPV$study_id>100,"*","")),
+         ilab.xpos=c(-0.25,0.25,-0.82), 
+         ilab.lab=c("Country", "Vaccine",""),
+         ilab.pos=4,
+         cex=.6,
          addcred=F,
          ylim=c(0,10),
          xlim=c(-1,2),
@@ -326,8 +349,11 @@ make_figure_4d_type2 <- function(){
          transf=function(x) exp(x),
          refline=NA,
          xlab="4-dose type 2 seroconversion",
-         ilab=data.frame(dat_4d_allIPV$type),
-         ilab.xpos=c(0.5), cex=.6,
+         ilab=data.frame(country,type,ifelse(dat_4d_allIPV$study_id>100,"*","")),
+         ilab.xpos=c(-0.25,0.25,-0.82), 
+         ilab.lab=c("Country", "Vaccine",""),
+         ilab.pos=4,
+         cex=.6,
          addcred=F,
          ylim=c(0,10),
          xlim=c(-1,2),
@@ -364,8 +390,11 @@ make_figure_4d_type3 <- function(){
          transf=function(x) exp(x),
          refline=NA,
          xlab="4-dose type 3 seroconversion",
-         ilab=data.frame(dat_4d_allIPV$type),
-         ilab.xpos=c(0.5), cex=.6,
+         ilab=data.frame(country,type,ifelse(dat_4d_allIPV$study_id>100,"*","")),
+         ilab.xpos=c(-0.25,0.25,-0.82), 
+         ilab.lab=c("Country", "Vaccine",""),
+         ilab.pos=4,
+         cex=.6,
          addcred=F,
          ylim=c(0,10),
          xlim=c(-1,2),
@@ -408,3 +437,33 @@ rma(yi=log_p_1,
     subset=schedule=='2, 3, 4 months',
     mods= ~ birthdose_OPV)
 
+
+png(file="figures/dose3serotype1.png", width = 2000, height = 2000,  res=300)
+make_figure_3d_type1()
+dev.off()
+
+
+png(file="figures/dose3serotype2.png", width = 2000, height = 2000,  res=300)
+make_figure_3d_type2()
+dev.off()
+
+
+png(file="figures/dose3serotype3.png", width = 2000, height = 2000,  res=300)
+make_figure_3d_type3()
+dev.off()
+
+
+
+png(file="figures/dose4serotype1.png", width = 1500, height = 1000,  res=300)
+make_figure_4d_type1()
+dev.off()
+
+
+png(file="figures/dose4serotype2.png", width = 1500, height = 1000,  res=300)
+make_figure_4d_type2()
+dev.off()
+
+
+png(file="figures/dose4serotype3.png", width = 1500, height = 1000,  res=300)
+make_figure_4d_type3()
+dev.off()
