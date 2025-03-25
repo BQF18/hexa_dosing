@@ -51,7 +51,8 @@ new_dat0 <- read_xlsx("hexa_review.xlsx",
   mutate(author = replace(author, author == "Sanofi et al", "Sanofi study")) %>%
   mutate(type = ifelse(type=="Hexa", paste(type, " (", type_notes, ")", sep=""), type)) %>%
   select(author, year, country, study_id, schedule, type, num_doses, type_notes, strain, serotype, p, N, Notes) %>%
-  filter(author != "LG Chem et al") # confidentialA
+  filter(author != "LG Chem et al") %>% # confidential
+  filter(!(author == "Capeding MR et al" & strain == "wild type"))
 
 # format new data from long to wide
 new_dat <- new_dat0 %>%
@@ -151,11 +152,11 @@ make_figure_3d_type1 <- function(){
          xlab="3-dose type 1 seroconversion",
          ilab=data.frame(country,type,ifelse(dat_3d_allIPV$study_id>100,"*","")),
          ilab.xpos=c(-0.25,0.25,-0.82), 
-         ilab.lab=c("Country", "Vaccine",""),
+         ilab.lab=c("Country", "Vaccine", ""),
          ilab.pos=4,
          cex=.6,
          addcred=F,
-         ylim=c(0,48),
+         ylim=c(0,47),
          xlim=c(-0.8,1.5),
          rows=gen_rma_rows(unlist(all_schedule_3d_allIPV$count), 
                            starting_row=1, gap_rows=3), 
@@ -206,7 +207,7 @@ make_figure_3d_type2 <- function(){
          ilab.pos=4,
          cex=.6,
          addcred=F,
-         ylim=c(0,48),
+         ylim=c(0,47),
          xlim=c(-0.8,1.5),
          rows=gen_rma_rows(unlist(all_schedule_3d_allIPV$count), 
                            starting_row=1, gap_rows=3), 
@@ -254,7 +255,7 @@ make_figure_3d_type3 <- function(){
          ilab.pos=4,
          cex=.6,
          addcred=F,
-         ylim=c(0,48),
+         ylim=c(0,47),
          xlim=c(-0.8,1.5),
          rows=gen_rma_rows(unlist(all_schedule_3d_allIPV$count), 
                            starting_row=1, gap_rows=3), 
@@ -438,32 +439,32 @@ rma(yi=log_p_1,
     mods= ~ birthdose_OPV)
 
 
-png(file="figures/dose3serotype1.png", width = 2000, height = 2000,  res=300)
+png(file="figure/dose3serotype1.png", width = 2000, height = 2000, res=300)
 make_figure_3d_type1()
 dev.off()
 
 
-png(file="figures/dose3serotype2.png", width = 2000, height = 2000,  res=300)
+png(file="figure/dose3serotype2.png", width = 2000, height = 2000, res=300)
 make_figure_3d_type2()
 dev.off()
 
 
-png(file="figures/dose3serotype3.png", width = 2000, height = 2000,  res=300)
+png(file="figure/dose3serotype3.png", width = 2000, height = 2000, res=300)
 make_figure_3d_type3()
 dev.off()
 
 
 
-png(file="figures/dose4serotype1.png", width = 1500, height = 1000,  res=300)
+png(file="figure/dose4serotype1.png", width = 1500, height = 1000,  res=300)
 make_figure_4d_type1()
 dev.off()
 
 
-png(file="figures/dose4serotype2.png", width = 1500, height = 1000,  res=300)
+png(file="figure/dose4serotype2.png", width = 1500, height = 1000,  res=300)
 make_figure_4d_type2()
 dev.off()
 
 
-png(file="figures/dose4serotype3.png", width = 1500, height = 1000,  res=300)
+png(file="figure/dose4serotype3.png", width = 1500, height = 1000,  res=300)
 make_figure_4d_type3()
 dev.off()
